@@ -21,7 +21,6 @@ unsafe fn schedule(v0: __m128i, v1: __m128i, v2: __m128i, v3: __m128i) -> __m128
     _mm_sha256msg2_epu32(t3, v3)
 }
 
-/*
 unsafe fn padding_schedule(w: usize) -> __m128i {
     match w {
         4 => _mm_set_epi64x(
@@ -31,7 +30,6 @@ unsafe fn padding_schedule(w: usize) -> __m128i {
         _ => panic!("invalid w value {}", w),
     }
 }
-*/
 
 macro_rules! rounds4 {
     ($abef:ident, $cdgh:ident, $rest:expr, $i:expr) => {{
@@ -55,10 +53,21 @@ macro_rules! schedule_rounds4 {
     }};
 }
 
+macro_rules! padding_schedule_rounds4 {
+    (
+        $abef:ident, $cdgh:ident,
+        $w0:expr, $w1:expr, $w2:expr, $w3:expr, $w4:expr,
+        $i: expr
+    ) => {{
+        $w4 = padding_schedule($w0, $w1, $w2, $w3);
+        rounds4!($abef, $cdgh, $w4, $i);
+    }};
+}
+
 // we use unaligned loads with `__m128i` pointers
 #[allow(clippy::cast_ptr_alignment)]
 #[target_feature(enable = "sha,sse2,ssse3,sse4.1")]
-unsafe fn digest_blocks(state: &mut [u32; 8], blocks: &[[u8; 64]]) {
+unsafe fn digest_blocks(state: &mut [u32; 8], message: &[u8; 64]) {
     #[allow(non_snake_case)]
     let MASK: __m128i = _mm_set_epi64x(
         0x0C0D_0E0F_0809_0A0Bu64 as i64,
@@ -74,46 +83,65 @@ unsafe fn digest_blocks(state: &mut [u32; 8], blocks: &[[u8; 64]]) {
     let mut abef = _mm_alignr_epi8(cdab, efgh, 8);
     let mut cdgh = _mm_blend_epi16(efgh, cdab, 0xF0);
 
-    /*
-    let block = &blocks[0];
-    let padding = &blocks[1];
-    assert_eq!(padding, &PADDING_BLOCK);
-    */
-    dbg!(blocks);
-    dbg!(blocks.len());
-    dbg!(blocks[0].len());
+    let abef_save = abef;
+    let cdgh_save = cdgh;
 
-    for block in blocks {
-        let abef_save = abef;
-        let cdgh_save = cdgh;
+    let data_ptr = message.as_ptr() as *const __m128i;
+    let mut w0 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(0)), MASK);
+    let mut w1 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(1)), MASK);
+    let mut w2 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(2)), MASK);
+    let mut w3 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(3)), MASK);
+    let mut w4;
 
-        let data_ptr = block.as_ptr() as *const __m128i;
-        let mut w0 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(0)), MASK);
-        let mut w1 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(1)), MASK);
-        let mut w2 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(2)), MASK);
-        let mut w3 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(3)), MASK);
-        let mut w4;
+    rounds4!(abef, cdgh, w0, 0);
+    rounds4!(abef, cdgh, w1, 1);
+    rounds4!(abef, cdgh, w2, 2);
+    rounds4!(abef, cdgh, w3, 3);
+    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 4);
+    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 5);
+    schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 6);
+    schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 7);
+    schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 8);
+    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 9);
+    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 10);
+    schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 11);
+    schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 12);
+    schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 13);
+    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 14);
+    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 15);
 
-        rounds4!(abef, cdgh, w0, 0);
-        rounds4!(abef, cdgh, w1, 1);
-        rounds4!(abef, cdgh, w2, 2);
-        rounds4!(abef, cdgh, w3, 3);
-        schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 4);
-        schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 5);
-        schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 6);
-        schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 7);
-        schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 8);
-        schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 9);
-        schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 10);
-        schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 11);
-        schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 12);
-        schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 13);
-        schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 14);
-        schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 15);
+    abef = _mm_add_epi32(abef, abef_save);
+    cdgh = _mm_add_epi32(cdgh, cdgh_save);
 
-        abef = _mm_add_epi32(abef, abef_save);
-        cdgh = _mm_add_epi32(cdgh, cdgh_save);
-    }
+    let abef_save = abef;
+    let cdgh_save = cdgh;
+
+    let data_ptr = PADDING_BLOCK.as_ptr() as *const __m128i;
+    let mut w0 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(0)), MASK);
+    let mut w1 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(1)), MASK);
+    let mut w2 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(2)), MASK);
+    let mut w3 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(3)), MASK);
+    let mut w4;
+
+    rounds4!(abef, cdgh, w0, 0);
+    rounds4!(abef, cdgh, w1, 1);
+    rounds4!(abef, cdgh, w2, 2);
+    rounds4!(abef, cdgh, w3, 3);
+    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 4);
+    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 5);
+    schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 6);
+    schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 7);
+    schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 8);
+    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 9);
+    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 10);
+    schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 11);
+    schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 12);
+    schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 13);
+    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 14);
+    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 15);
+
+    abef = _mm_add_epi32(abef, abef_save);
+    cdgh = _mm_add_epi32(cdgh, cdgh_save);
 
     let feba = _mm_shuffle_epi32(abef, 0x1B);
     let dchg = _mm_shuffle_epi32(cdgh, 0xB1);
@@ -128,6 +156,8 @@ unsafe fn digest_blocks(state: &mut [u32; 8], blocks: &[[u8; 64]]) {
 cpufeatures::new!(shani_cpuid, "sha", "sse2", "ssse3", "sse4.1");
 
 pub fn compress_64byte(state: &mut [u32; 8], blocks: &[[u8; 64]]) {
+    panic!();
+    /*
     // TODO: Replace with https://github.com/rust-lang/rfcs/pull/2725
     // after stabilization
     if shani_cpuid::get() {
@@ -139,13 +169,14 @@ pub fn compress_64byte(state: &mut [u32; 8], blocks: &[[u8; 64]]) {
         todo!("remove this");
         // crate::sha256::soft::compress(state, blocks);
     }
+    */
 }
 
-pub fn compress_64byte_legit(message: [u8; 64]) -> [u8; 32] {
+pub fn compress_64byte_legit(message: &[u8; 64]) -> [u8; 32] {
     let mut state = crate::consts::H256_256;
     if shani_cpuid::get() {
         unsafe {
-            digest_blocks(&mut state, &[message, PADDING_BLOCK]);
+            digest_blocks(&mut state, message);
 
             let mut output = [0; 32];
             output[0..4].copy_from_slice(&state[0].to_be_bytes());
@@ -178,7 +209,7 @@ mod tests {
         digest.update(MESSAGE_FF);
         let reference: [u8; 32] = digest.finalize().into();
 
-        let tested = compress_64byte_legit(MESSAGE_FF);
+        let tested = compress_64byte_legit(&MESSAGE_FF);
         assert_eq!(reference, tested);
     }
 }
