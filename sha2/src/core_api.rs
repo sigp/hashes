@@ -1,4 +1,4 @@
-use crate::{consts, sha256::compress256, sha512::compress512};
+use crate::{consts, sha256::compress256, sha256_64byte::compress256_64byte, sha512::compress512};
 use core::{fmt, slice::from_ref};
 use digest::{
     block_buffer::Eager,
@@ -79,6 +79,80 @@ impl fmt::Debug for Sha256VarCore {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Sha256VarCore { ... }")
+    }
+}
+
+/// Core block-level SHA-256 hasher with variable output size which only supports 64-byte messages.
+///
+/// Supports initialization only for 28 and 32 byte output sizes, i.e. 224 and 256 bits
+/// respectively.
+#[derive(Clone)]
+pub struct Sha25664VarCore {
+    state: consts::State256,
+    block_len: u64,
+}
+
+impl HashMarker for Sha25664VarCore {}
+
+impl BlockSizeUser for Sha25664VarCore {
+    type BlockSize = U64;
+}
+
+impl BufferKindUser for Sha25664VarCore {
+    type BufferKind = Eager;
+}
+
+impl UpdateCore for Sha25664VarCore {
+    #[inline]
+    fn update_blocks(&mut self, blocks: &[Block<Self>]) {
+        self.block_len += blocks.len() as u64;
+        compress256_64byte(&mut self.state, blocks);
+    }
+}
+
+impl OutputSizeUser for Sha25664VarCore {
+    type OutputSize = U32;
+}
+
+impl VariableOutputCore for Sha25664VarCore {
+    const TRUNC_SIDE: TruncSide = TruncSide::Left;
+
+    #[inline]
+    fn new(output_size: usize) -> Result<Self, InvalidOutputSize> {
+        let state = match output_size {
+            28 => consts::H256_224,
+            32 => consts::H256_256,
+            _ => return Err(InvalidOutputSize),
+        };
+        let block_len = 0;
+        Ok(Self { state, block_len })
+    }
+
+    #[inline]
+    fn finalize_variable_core(&mut self, buffer: &mut Buffer<Self>, out: &mut Output<Self>) {
+        let bs = Self::BlockSize::U64;
+        let bit_len = 8 * (buffer.get_pos() as u64 + bs * self.block_len);
+        buffer.len64_padding_be(bit_len, |b| {
+            compress256_64byte(&mut self.state, from_ref(b))
+        });
+
+        for (chunk, v) in out.chunks_exact_mut(4).zip(self.state.iter()) {
+            chunk.copy_from_slice(&v.to_be_bytes());
+        }
+    }
+}
+
+impl AlgorithmName for Sha25664VarCore {
+    #[inline]
+    fn write_alg_name(f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Sha256")
+    }
+}
+
+impl fmt::Debug for Sha25664VarCore {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Sha25664VarCore { ... }")
     }
 }
 

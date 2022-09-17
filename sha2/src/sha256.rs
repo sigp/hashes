@@ -6,7 +6,7 @@ cfg_if::cfg_if! {
         use soft::compress;
     } else if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
         #[cfg(not(feature = "asm"))]
-        mod soft;
+        pub mod soft;
         #[cfg(feature = "asm")]
         mod soft {
             pub(crate) use sha2_asm::compress256 as compress;

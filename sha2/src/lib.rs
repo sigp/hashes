@@ -43,7 +43,8 @@
 //! [1]: https://en.wikipedia.org/wiki/SHA-2
 //! [2]: https://github.com/RustCrypto/hashes
 
-#![no_std]
+// TODO(paul): uncomment this after I'm done debugging.
+// #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg",
@@ -65,14 +66,17 @@ use digest::{
 mod consts;
 mod core_api;
 mod sha256;
+mod sha256_64byte;
 mod sha512;
 
 #[cfg(feature = "compress")]
 pub use sha256::compress256;
 #[cfg(feature = "compress")]
+pub use sha256_64byte::compress256_64byte;
+#[cfg(feature = "compress")]
 pub use sha512::compress512;
 
-pub use core_api::{Sha256VarCore, Sha512VarCore};
+pub use core_api::{Sha25664VarCore, Sha256VarCore, Sha512VarCore};
 
 impl_oid_carrier!(OidSha256, "2.16.840.1.101.3.4.2.1");
 impl_oid_carrier!(OidSha384, "2.16.840.1.101.3.4.2.2");
@@ -85,6 +89,8 @@ impl_oid_carrier!(OidSha512_256, "2.16.840.1.101.3.4.2.6");
 pub type Sha224 = CoreWrapper<CtVariableCoreWrapper<Sha256VarCore, U28, OidSha224>>;
 /// SHA-256 hasher.
 pub type Sha256 = CoreWrapper<CtVariableCoreWrapper<Sha256VarCore, U32, OidSha256>>;
+/// SHA-256 hasher for 64 byte messages *only*.
+pub type Sha25664 = CoreWrapper<CtVariableCoreWrapper<Sha25664VarCore, U32, OidSha256>>;
 /// SHA-512/224 hasher.
 pub type Sha512_224 = CoreWrapper<CtVariableCoreWrapper<Sha512VarCore, U28, OidSha512_224>>;
 /// SHA-512/256 hasher.
