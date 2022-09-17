@@ -225,15 +225,26 @@ mod tests {
     use crate::{consts, Sha256};
     use digest::Digest;
 
-    const MESSAGE_FF: [u8; 64] = [255; 64];
+    const MESSAGE_ALL_42: [u8; 64] = [42; 64];
+    const MESSAGE_ALL_256: [u8; 64] = [255; 64];
 
     #[test]
-    fn message_ff() {
+    fn message_all_256() {
         let mut digest = Sha256::new();
-        digest.update(MESSAGE_FF);
+        digest.update(MESSAGE_ALL_256);
         let reference: [u8; 32] = digest.finalize().into();
 
-        let tested = compress_64byte_legit(&MESSAGE_FF);
+        let tested = compress_64byte_legit(&MESSAGE_ALL_256);
+        assert_eq!(reference, tested);
+    }
+
+    #[test]
+    fn message_all_42() {
+        let mut digest = Sha256::new();
+        digest.update(MESSAGE_ALL_42);
+        let reference: [u8; 32] = digest.finalize().into();
+
+        let tested = compress_64byte_legit(&MESSAGE_ALL_42);
         assert_eq!(reference, tested);
     }
 }
