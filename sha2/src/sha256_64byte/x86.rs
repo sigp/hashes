@@ -23,10 +23,18 @@ unsafe fn schedule(v0: __m128i, v1: __m128i, v2: __m128i, v3: __m128i) -> __m128
 
 unsafe fn padding_schedule(w: usize) -> __m128i {
     match w {
-        4 => _mm_set_epi64x(
-            0x0000_0000_0000_0000u64 as i64,
-            0x0000_0000_0000_0000u64 as i64,
-        ),
+        4 => _mm_set_epi64x(88545047891968, 90071994694893568),
+        5 => _mm_set_epi64x(-6917528890117679294, 2473883656779728896),
+        6 => _mm_set_epi64x(-396282682346646371, 26058427097153536),
+        7 => _mm_set_epi64x(-5545033633780809766, 1254069263576212944),
+        8 => _mm_set_epi64x(-8581923644553124973, -7098715182109380528),
+        9 => _mm_set_epi64x(5686690158400897391, 7467372019251364661),
+        10 => _mm_set_epi64x(-6323261045066670398, -8147535963753589275),
+        11 => _mm_set_epi64x(-5741775305734093336, 3959738077444667639),
+        12 => _mm_set_epi64x(4260581113044038117, -4823012860181579068),
+        13 => _mm_set_epi64x(366208415425843270, -2136155486653845993),
+        14 => _mm_set_epi64x(-4149868920368453422, 2749245598703881988),
+        15 => _mm_set_epi64x(-8815896854859634831, 7121054918882378188),
         _ => panic!("invalid w value {}", w),
     }
 }
@@ -59,9 +67,25 @@ macro_rules! padding_schedule_rounds4 {
         $w0:expr, $w1:expr, $w2:expr, $w3:expr, $w4:expr,
         $i: expr
     ) => {{
-        $w4 = padding_schedule($w0, $w1, $w2, $w3);
+        $w4 = padding_schedule($i);
+
+        #[cfg(debug_assertions)]
+        {
+            assert_eq!(
+                as_i64x4($w4),
+                as_i64x4(schedule($w0, $w1, $w2, $w3)),
+                "{}",
+                $i
+            );
+        }
+
         rounds4!($abef, $cdgh, $w4, $i);
     }};
+}
+
+#[cfg(debug_assertions)]
+unsafe fn as_i64x4(i: __m128i) -> [i64; 2] {
+    [_mm_extract_epi64(i, 0), _mm_extract_epi64(i, 1)]
 }
 
 // we use unaligned loads with `__m128i` pointers
@@ -127,18 +151,18 @@ unsafe fn digest_blocks(state: &mut [u32; 8], message: &[u8; 64]) {
     rounds4!(abef, cdgh, w1, 1);
     rounds4!(abef, cdgh, w2, 2);
     rounds4!(abef, cdgh, w3, 3);
-    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 4);
-    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 5);
-    schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 6);
-    schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 7);
-    schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 8);
-    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 9);
-    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 10);
-    schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 11);
-    schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 12);
-    schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 13);
-    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 14);
-    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 15);
+    padding_schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 4);
+    padding_schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 5);
+    padding_schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 6);
+    padding_schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 7);
+    padding_schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 8);
+    padding_schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 9);
+    padding_schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 10);
+    padding_schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 11);
+    padding_schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 12);
+    padding_schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 13);
+    padding_schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 14);
+    padding_schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 15);
 
     abef = _mm_add_epi32(abef, abef_save);
     cdgh = _mm_add_epi32(cdgh, cdgh_save);
