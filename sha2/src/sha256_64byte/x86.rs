@@ -107,65 +107,42 @@ unsafe fn digest_blocks(state: &mut [u32; 8], message: &[u8; 64]) {
     let mut abef = _mm_alignr_epi8(cdab, efgh, 8);
     let mut cdgh = _mm_blend_epi16(efgh, cdab, 0xF0);
 
-    let abef_save = abef;
-    let cdgh_save = cdgh;
+    macro_rules! process_block {
+        ($block: ident, $schedule: ident) => {
+            let abef_save = abef;
+            let cdgh_save = cdgh;
 
-    let data_ptr = message.as_ptr() as *const __m128i;
-    let mut w0 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(0)), MASK);
-    let mut w1 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(1)), MASK);
-    let mut w2 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(2)), MASK);
-    let mut w3 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(3)), MASK);
-    let mut w4;
+            let data_ptr = $block.as_ptr() as *const __m128i;
+            let mut w0 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(0)), MASK);
+            let mut w1 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(1)), MASK);
+            let mut w2 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(2)), MASK);
+            let mut w3 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(3)), MASK);
+            let mut w4;
 
-    rounds4!(abef, cdgh, w0, 0);
-    rounds4!(abef, cdgh, w1, 1);
-    rounds4!(abef, cdgh, w2, 2);
-    rounds4!(abef, cdgh, w3, 3);
-    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 4);
-    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 5);
-    schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 6);
-    schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 7);
-    schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 8);
-    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 9);
-    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 10);
-    schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 11);
-    schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 12);
-    schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 13);
-    schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 14);
-    schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 15);
+            rounds4!(abef, cdgh, w0, 0);
+            rounds4!(abef, cdgh, w1, 1);
+            rounds4!(abef, cdgh, w2, 2);
+            rounds4!(abef, cdgh, w3, 3);
+            $schedule!(abef, cdgh, w0, w1, w2, w3, w4, 4);
+            $schedule!(abef, cdgh, w1, w2, w3, w4, w0, 5);
+            $schedule!(abef, cdgh, w2, w3, w4, w0, w1, 6);
+            $schedule!(abef, cdgh, w3, w4, w0, w1, w2, 7);
+            $schedule!(abef, cdgh, w4, w0, w1, w2, w3, 8);
+            $schedule!(abef, cdgh, w0, w1, w2, w3, w4, 9);
+            $schedule!(abef, cdgh, w1, w2, w3, w4, w0, 10);
+            $schedule!(abef, cdgh, w2, w3, w4, w0, w1, 11);
+            $schedule!(abef, cdgh, w3, w4, w0, w1, w2, 12);
+            $schedule!(abef, cdgh, w4, w0, w1, w2, w3, 13);
+            $schedule!(abef, cdgh, w0, w1, w2, w3, w4, 14);
+            $schedule!(abef, cdgh, w1, w2, w3, w4, w0, 15);
 
-    abef = _mm_add_epi32(abef, abef_save);
-    cdgh = _mm_add_epi32(cdgh, cdgh_save);
+            abef = _mm_add_epi32(abef, abef_save);
+            cdgh = _mm_add_epi32(cdgh, cdgh_save);
+        };
+    }
 
-    let abef_save = abef;
-    let cdgh_save = cdgh;
-
-    let data_ptr = PADDING_BLOCK.as_ptr() as *const __m128i;
-    let mut w0 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(0)), MASK);
-    let mut w1 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(1)), MASK);
-    let mut w2 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(2)), MASK);
-    let mut w3 = _mm_shuffle_epi8(_mm_loadu_si128(data_ptr.add(3)), MASK);
-    let mut w4;
-
-    rounds4!(abef, cdgh, w0, 0);
-    rounds4!(abef, cdgh, w1, 1);
-    rounds4!(abef, cdgh, w2, 2);
-    rounds4!(abef, cdgh, w3, 3);
-    padding_schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 4);
-    padding_schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 5);
-    padding_schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 6);
-    padding_schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 7);
-    padding_schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 8);
-    padding_schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 9);
-    padding_schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 10);
-    padding_schedule_rounds4!(abef, cdgh, w2, w3, w4, w0, w1, 11);
-    padding_schedule_rounds4!(abef, cdgh, w3, w4, w0, w1, w2, 12);
-    padding_schedule_rounds4!(abef, cdgh, w4, w0, w1, w2, w3, 13);
-    padding_schedule_rounds4!(abef, cdgh, w0, w1, w2, w3, w4, 14);
-    padding_schedule_rounds4!(abef, cdgh, w1, w2, w3, w4, w0, 15);
-
-    abef = _mm_add_epi32(abef, abef_save);
-    cdgh = _mm_add_epi32(cdgh, cdgh_save);
+    process_block!(message, schedule_rounds4);
+    process_block!(PADDING_BLOCK, padding_schedule_rounds4);
 
     let feba = _mm_shuffle_epi32(abef, 0x1B);
     let dchg = _mm_shuffle_epi32(cdgh, 0xB1);
@@ -222,7 +199,7 @@ pub fn compress_64byte_legit(message: &[u8; 64]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{consts, Sha256};
+    use crate::Sha256;
     use digest::Digest;
 
     const MESSAGE_ALL_42: [u8; 64] = [42; 64];
